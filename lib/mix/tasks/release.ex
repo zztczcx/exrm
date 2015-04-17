@@ -277,7 +277,7 @@ defmodule Mix.Tasks.Release do
                 info "Using custom .appup located in rel/#{name}.appup"
               {:error, reason} ->
                 error "Unable to copy custom .appup file: #{reason}"
-                exit(:normal)
+                abort!
             end
           _ ->
             # No custom .appup found, proceed with autogeneration
@@ -286,7 +286,7 @@ defmodule Mix.Tasks.Release do
                 info "Generated .appup for #{name} #{v1} -> #{version}"
               {:error, reason} ->
                 error "Appup generation failed with #{reason}"
-                exit(:normal)
+                abort!
             end
         end
       end
@@ -300,7 +300,7 @@ defmodule Mix.Tasks.Release do
         config
       {:error, message} ->
         error message
-        exit(:normal)
+        abort!
     end
   end
 
@@ -330,18 +330,15 @@ defmodule Mix.Tasks.Release do
     include_erts = Keyword.get(relx_config, :include_erts, true)
     extras = case include_erts do
       false -> []
-      true  -> [{'#{erts}', '#{rel_dest_path([name, erts])}'}]
-      path when is_binary(path) ->
-        [{'#{erts}', '#{path}'}]
+      _     -> [{'#{erts}', '#{rel_dest_path([name, erts])}'}]
     end
     # Re-package release with modifications
+    file_list = File.ls!(rel_dest_path(name))
+      |> Enum.reject(&(&1 == erts))
+      |> Enum.map(&({'#{&1}', '#{rel_dest_path([name, &1])}'}))
     :ok = :erl_tar.create(
       '#{tarball}',
-      [
-        {'lib',      '#{rel_dest_path([name, "lib"])}'},
-        {'releases', '#{rel_dest_path([name, "releases"])}'},
-        {'bin',      '#{rel_dest_path([name, "bin"])}'},
-      ] ++ extras,
+      file_list ++ extras,
       [:compressed]
     )
     # Continue..

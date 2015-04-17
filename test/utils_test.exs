@@ -1,13 +1,14 @@
 defmodule UtilsTest do
   use ExUnit.Case, async: true
 
+  import PathHelpers
+
   alias ReleaseManager.Utils
 
-  @example_app_path Path.join([File.cwd!, "test", "example_app"])
-  @old_path         Path.join([File.cwd!, "test", "configs", "old_relx.config"])
-  @new_path         Path.join([File.cwd!, "test", "configs", "new_relx.config"])
-  @expected_path    Path.join([File.cwd!, "test", "configs", "merged_relx.config"])
-
+  @example_app_path fixture_path("example_app")
+  @old_path         fixture_path("configs/old_relx.config")
+  @new_path         fixture_path("configs/new_relx.config")
+  @expected_path    fixture_path("configs/merged_relx.config")
 
   defmacrop with_app(body) do
     quote do
@@ -78,4 +79,12 @@ defmodule UtilsTest do
     end
   end
 
+  test "can compare semver versions" do
+    assert ["1.0.10"|_] = Utils.sort_versions(["1.0.1", "1.0.2", "1.0.9", "1.0.10"])
+  end
+
+  test "can compare non-semver versions" do
+    assert ["1.3", "1.2", "1.1"] = Utils.sort_versions(["1.1", "1.3", "1.2"])
+  end
+  
 end

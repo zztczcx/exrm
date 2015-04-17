@@ -1,21 +1,22 @@
-docs_task = "tasks/docs.exs"
-if File.exists?(docs_task) do
-  Code.eval_file "tasks/docs.exs"
-end
-
 defmodule ReleaseManager.Mixfile do
   use Mix.Project
 
   def project do
     [ app: :exrm,
-      version: "0.14.16",
+      version: "0.15.3",
       elixir: ">= 0.15.1 and ~> 1.0.0",
       description: description,
       package: package,
-      deps: [{:conform, "~> 0.11.0"}] ]
+      deps: deps ]
   end
 
   def application, do: []
+
+  def deps do
+    [{:conform, "~> 0.13.0"},
+     {:earmark, "~> 0.1", only: :dev},
+     {:ex_doc, "~> 0.5", only: :dev}]
+  end
 
   defp description do
     """

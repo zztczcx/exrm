@@ -94,6 +94,9 @@ defmodule ReleaseManager.Utils do
   @doc "Print an error message in red"
   def error(message), do: IO.puts "==> #{IO.ANSI.red}#{message}#{IO.ANSI.reset}"
 
+  @doc "Exits with exit status 1"
+  def abort!, do: exit({:shutdown, 1})
+
   @doc """
   Get a list of tuples representing the previous releases:
 
@@ -118,8 +121,33 @@ defmodule ReleaseManager.Utils do
   Get the most recent release prior to the current one
   """
   def get_last_release(project) do
-    [{_,version} | _] = project |> get_releases |> Enum.sort(fn {_, v1}, {_, v2} -> v1 > v2 end)
-    version
+    hd(project |> get_releases |> Enum.map(fn {_, v} -> v end) |> sort_versions)
+  end
+
+  @doc """
+  Sort a list of versions, latest one first. Tries to use semver version 
+  compare, but can fall back to regular string compare.
+  """
+  def sort_versions(versions) do
+    versions |> Enum.sort(
+      fn v1, v2 ->
+        case { parse_version(v1), parse_version(v2) } do
+          {{:semantic, v1}, {:semantic, v2}} ->
+            case Version.compare(v1, v2) do
+              :gt -> true
+              _   -> false
+            end;
+          {{_, v1}, {_, v2}} ->
+            v1 >  v2
+        end
+      end)
+  end
+
+  defp parse_version(ver) do
+    case Version.parse(ver) do
+      {:ok, semver} -> {:semantic, semver}
+      :error        -> {:nonsemantic, ver}
+    end
   end
 
   @doc """
@@ -153,20 +181,19 @@ defmodule ReleaseManager.Utils do
         terms
       {:error, {line, type, msg}} ->
         error "Unable to parse #{path}: Line #{line}, #{type}, - #{msg}"
-        exit(:normal)
+        abort!
       {:error, reason} ->
         error "Unable to access #{path}: #{reason}"
-        exit(:normal)
+        abort!
     end
     result
   end
-
 
   @doc """
   Convert a string to Erlang terms
   """
   def string_to_terms(str) do
-    str 
+    str
     |> String.split("}.")
     |> Stream.map(&(String.strip(&1, ?\n)))
     |> Stream.map(&String.strip/1)
@@ -184,25 +211,25 @@ defmodule ReleaseManager.Utils do
   in the relx.config file
   """
   def merge(old, new) when is_list(old) and is_list(new) do
-    do_merge(old, new, []) |> Enum.reverse
+    merge(old, new, [])
   end
 
-  defp do_merge([h|t], new, acc) when is_tuple(h) do
-    case :lists.keysearch(elem(h, 0), 1, new) do
-      {:value, new_value} ->
+  defp merge([h|t], new, acc) when is_tuple(h) do
+    case :lists.keytake(elem(h, 0), 1, new) do
+      {:value, new_value, rest} ->
         # Value is present in new, so merge the value
-        merged = do_merge_term(h, new_value)
-        do_merge(t, new, [merged|acc])
+        merged = merge_term(h, new_value)
+        merge(t, rest, [merged|acc])
       false ->
         # Value doesn't exist in new, so add it
-        do_merge(t, new, [h|acc])
+        merge(t, new, [h|acc])
     end
   end
-  defp do_merge([], _new, acc) do
-    acc
+  defp merge([], new, acc) do
+    Enum.reverse(acc, new)
   end
 
-  defp do_merge_term(old, new) when is_tuple(old) and is_tuple(new) do
+  defp merge_term(old, new) when is_tuple(old) and is_tuple(new) do
     old
     |> Tuple.to_list
     |> Enum.with_index
@@ -218,7 +245,7 @@ defmodule ReleaseManager.Utils do
               [merged|acc]
           end
         {val, idx}, acc when is_tuple(val) ->
-          [do_merge_term(val, elem(new, idx))|acc]
+          [merge_term(val, elem(new, idx))|acc]
         {_val, idx}, acc ->
           [elem(new, idx)|acc]
        end)
@@ -291,7 +318,7 @@ defmodule ReleaseManager.Utils do
             symlink = sym |> IO.iodata_to_binary
             path |> Path.dirname |> Path.join(symlink) |> Path.expand
         end
-    end |> String.replace("/bin/elixir", "")
+    end |> String.replace(~r(/bin/elixir$), "")
   end
 
 end
